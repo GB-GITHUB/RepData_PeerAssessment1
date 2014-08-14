@@ -1,9 +1,42 @@
 # Reproducible Research: Peer Assessment 1
 
+## Introduction
+Analyzing data about personal movement using activity monitoring devices.
+The data analyzed consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+The variables in this dataset used for analysis are:
+
+* **steps**: Number of steps taking in a 5-minute interval (missing values are coded as `NA`)
+
+* **date**: The date on which the measurement was taken in YYYY-MM-DD format
+
+* **interval**: Identifier for the 5-minute interval in which measurement was taken
+
+for a total of 17,568 observations.
 
 ## Loading and preprocessing the data
-
-
+```{r}
+################################################################################
+# Function: get_raw_data
+################################################################################
+# DESCRIPTION:  If the raw data zip is not already downloaded, download it from the web and unzip it
+# INPUT:        
+#       rawData --> File to be downloaded
+################################################################################
+get_raw_data <- function(rawData = "NEI_data.zip") {
+        # If file does not already exist
+        if (!file.exists(rawData)) {
+                # Set file URL
+                fileUrl <- "https://d396qusza40orc.cloudfront.net/exdata%2Fdata%2FNEI_data.zip"
+                # Download File
+                download.file(fileUrl, rawData, method = "auto")
+        }
+        
+        # Un-zip file
+        writeLines("INFO: Unzipping File(s)")
+        unzip(rawData)
+}
+```
 
 ## What is mean total number of steps taken per day?
 
