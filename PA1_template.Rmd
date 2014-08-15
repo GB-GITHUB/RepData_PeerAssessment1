@@ -1,7 +1,8 @@
 # Reproducible Research: Peer Assessment 1
 
 ## Introduction
-Analyzing data about personal movement using activity monitoring devices.
+Goal of this analysis: Analyzing data about personal movement using activity monitoring devices.
+
 The data analyzed consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
 
 The variables in this dataset used for analysis are:
@@ -14,40 +15,220 @@ The variables in this dataset used for analysis are:
 
 for a total of 17,568 observations.
 
+This R Markdown document performs and documents the analytic steps required to perform such analysis.
+
 ## Loading and preprocessing the data
-```{r}
+
+```{r getRawData}
 ################################################################################
 # Function: get_raw_data
 ################################################################################
-# DESCRIPTION:  If the raw data zip is not already downloaded, download it from the web and unzip it
+# DESCRIPTION:  Download raw data zip file from the web and unzip it
 # INPUT:        
 #       rawData --> File to be downloaded
+#       fileURL --> URL from which the raw data file can be downloaded
 ################################################################################
-get_raw_data <- function(rawData = "NEI_data.zip") {
-        # If file does not already exist
-        if (!file.exists(rawData)) {
-                # Set file URL
-                fileUrl <- "https://d396qusza40orc.cloudfront.net/exdata%2Fdata%2FNEI_data.zip"
-                # Download File
-                download.file(fileUrl, rawData, method = "auto")
+get_raw_data <- function(rawData = "activity_data.zip", fileURL) {
+        
+        setInternet2(TRUE)  # set the R_WIN_INTERNET2 to TRUE
+        
+        dataDIR         <- "./data"
+        logFileName     <- "README.txt" #paste(rawData, ".log", sep="")
+
+        # Create directory if it does not exist
+        if(!file.exists(dataDIR)){
+                writeLines("INFO: Data directory created")
+                dir.create("data")
         }
+
+        # Connect to log file
+        logFilePath     <- paste(dataDIR, "/", logFileName, sep="")
+        logFileConn     <- file(logFilePath, open="w")
+        
+        # Set Raw file path
+        dataRawFilePath <- paste(dataDIR,"/",rawData, sep="")
+
+        # Set file URL
+        fileUrl <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+
+        # Download File
+        writeLines("INFO: Downloading File")
+        download.file(fileUrl, dataRawFilePath, method = "auto")
+
+        # Writing info about downloaded file
+        writeLines(paste("Raw Data File Name:", rawData), logFileConn)
+        writeLines(paste("Raw Data File URL:", fileUrl), logFileConn)
+        writeLines(paste("Date last accessed:", Sys.time()), logFileConn)
+        close(logFileConn)
         
         # Un-zip file
-        writeLines("INFO: Unzipping File(s)")
-        unzip(rawData)
+        writeLines("INFO: Unzipping File")
+        unzip(zipfile = dataRawFilePath, exdir = dataDIR)        
 }
 ```
 
-## What is mean total number of steps taken per day?
+Raw data is downloaded from the web, stored in 'data' folder and unzipped.
+Download information (File name, URL, Date last accessed) can be found in README.txt
 
+### Getting data
+```{r}
+# Calling get_raw_data function
+get_raw_data()
+```
 
+### Loading file
+```{r loadRawData}
+# Loading csv file in a dat.frame
+rawData <- read.csv("data/activity.csv")
+# returning data.frame structure
+str(rawData)
+```
+
+### Pre-processing the Data
+1. Convert date variable datatype from Factor to Date
+```{r PreProcessRawData}
+rawData$date <- as.Date(rawData$date , format = "%Y-%m-%d")
+```
+
+## Analyzing ##
+### What is mean total number of steps taken per day?
+Ignoring the missing values in the dataset, we want to analyze the mean total number of steps taken per day
+
+#### Histogram of the total number of steps taken each day
+
+```{r dailyHistoPlot}
+# Aggreggating data: Sum of steps by day
+aggDataByDay <- with(rawData, aggregate(steps ~ date, FUN=sum))
+# Plotting data
+with(aggDataByDay, plot(date, steps, type="h", main = "Total number of steps taken each day"))
+```
+
+#### **mean** and **median** total number of steps taken per day
+
+* Mean:
+```{r dailyMean}
+# Calculate mean on aggregated data ignoring NAs
+mean(aggDataByDay$steps, na.rm = TRUE)
+```
+* Median:
+```{r dailyMedian}
+# Calculate median on aggregated data ignoring NAs
+median(aggDataByDay$steps, na.rm = TRUE )
+```
 
 ## What is the average daily activity pattern?
 
+#### Time series plot of the 5-minute interval and the average number of steps taken, averaged across all days
 
+```{r ActivityTimeSeriesPlot}
+# Aggreggating data: Mean of steps by interval
+aggDataByInterval <- with(rawData, aggregate(steps ~ interval, FUN=mean))
+names(aggDataByInterval)[2] <- "avgSteps"
+        
+# Plotting data
+with(aggDataByInterval, plot(interval, avgSteps, type="l", main = "Daily average number of steps by 5-minute interval", xlab="5-minute interval", ylab="Average number of steps"))
+```
+
+#### Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```{r MaxStepsActivityInterval}
+aggDataByInterval[which.max(aggDataByInterval$avgSteps),1]
+```
 
 ## Imputing missing values
 
+#### Total number of missing values in the dataset (i.e. the total number of rows with `NA`s)
 
+```{r TotalNAs}
+nrow(subset(rawData, steps ='NA'))
+```
+
+#### Strategy for filling in all of the missing values in the dataset:
+        --> Using the mean for the interval as a replacement when missing value
+
+```{r processingNAs}
+# Merging rawData with already calculated means by Interval, by interval
+refinedData <- merge(rawData, aggDataByInterval, by="interval")
+
+# If NA, then overwrite column 2 (steps) content by column 4 content (avgSteps)
+refinedData[is.na(refinedData$steps),2] <- refinedData[is.na(refinedData$steps),4]
+
+# get rid of column 4 (avgSteps)
+refinedData$avgSteps<- NULL
+
+str(refinedData)
+```
+A new dataset called refinedData having the same variables than the rawData dataset has been created.
+
+### Inspecting differences
+
+#### Histogram of the total number of steps taken each day for the refined dataset
+
+```{r dailyHistoPlotRefinedData}
+# Aggreggating data: Sum of steps by day
+aggDataByDay <- with(refinedData, aggregate(steps ~ date, FUN=sum))
+# Plotting data
+with(aggDataByDay, plot(date, steps, type="h", main = "Total number of steps taken each day - refined dataset"))
+```
+
+#### **mean** and **median** total number of steps taken per day for the refined dataset
+
+* Mean:
+```{r dailyMeanRefinedData}
+# Calculate mean on aggregated data ignoring NAs
+mean(aggDataByDay$steps, na.rm = TRUE)
+```
+* Median:
+```{r dailyMedianRefinedData}
+# Calculate median on aggregated data ignoring NAs
+median(aggDataByDay$steps, na.rm = TRUE )
+```
+
+**Impact:** Mean and median are now equal.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+#### Creating a new factor variable (dayType) in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+
+```{r dayType}
+################################################################################
+# Function: isWeekEnd()
+################################################################################
+# DESCRIPTION:  Return TRUE if day is in weekend
+# INPUT:        
+#       date --> Date to be checked
+################################################################################
+isWeekEnd <- function(date) {
+        !(weekdays(as.Date(date)) %in% c('Saturday','Sunday'))
+}
+
+#make sure we use English date names
+Sys.setlocale("LC_TIME", "English")
+
+# Set default to weekday for dayType variable 
+refinedData$dayType <- "weekday"
+
+# Identify weekend days calling the isWeekEnd() function
+refinedData$dayType[isWeekEnd(refinedData$date)] <- "weekend"
+
+# Changing the dayType variable to factor
+refinedData$dayType <- as.factor(refinedData$dayType)
+
+str(refinedData$dayType)
+```
+#### Time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis)
+
+```{r dayTypePlot}
+library(lattice)
+# Aggreggating data: Sum of steps by day
+aggDataByDayType <- with(refinedData, aggregate(steps ~ dayType + interval, FUN=mean))
+# Plotting data
+with(aggDataByDayType,
+        xyplot( steps ~ interval | dayType,
+                layout=c(1,2),
+                type="l",
+                xlab = "Interval",
+                ylab = "Average # of steps",
+                main = "Average # of steps taken by 5-minute interval")
+    )
+
